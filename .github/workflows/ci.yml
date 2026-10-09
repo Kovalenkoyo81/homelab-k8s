@@ -1,0 +1,43 @@
+---
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Версия k3s в кластере — v1.35.x
+  KUBERNETES_VERSION: "1.35.0"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: yamllint
+        run: |
+          pip install yamllint==1.38.0
+          yamllint .
+
+      # -strict: неизвестное поле (опечатка) — ошибка, а не тихий пропуск
+      - name: kubeconform
+        run: >-
+          docker run --rm -v "$PWD":/repo -w /repo
+          --entrypoint /kubeconform
+          ghcr.io/yannh/kubeconform:v0.8.0-alpine
+          -strict -summary -kubernetes-version "$KUBERNETES_VERSION" apps/
